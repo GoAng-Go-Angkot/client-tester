@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Rute 05</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; }
+        header { padding: 10px 20px; background-color: #333; color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 1000; }
+        h1 { margin: 0; font-size: 1.5em; }
+        #status { font-size: 0.8em; opacity: 0.8; }
+        main { flex-grow: 1; display: flex; }
+        #map-container { flex-grow: 1; height: 100%; }
+        #log-container { width: 300px; background-color: #f4f4f9; padding: 10px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 0.8em; border-left: 1px solid #ddd; }
+        #log-container h3 { margin-top: 0; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Monitor Rute 05</h1>
+        <div id="status">Menghubungkan ke server...</div>
+    </header>
+    
+    <main>
+        <div id="map-container"></div>
+        
+        <div id="log-container">
+            <h3>Log Data Mentah:</h3>
+            <ul id="log-list"></ul>
+        </div>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+    <script>
+        // ============== KONFIGURASI ==============
+        // const serverUrl = "http://localhost:3000"; // Ganti dengan URL server Socket.IO Anda
+        const serverUrl = "http://35.219.117.53/";
+        
+        const targetEvent = "route/05";
+        // =======================================
+
+        const statusEl = document.getElementById('status');
+        const logListEl = document.getElementById('log-list');
+
+        let map;
+        let driverMarker;
+
+        // Fungsi untuk inisialisasi peta
+        function initMap() {
+            // Koordinat awal (contoh: Jakarta)
+            map = L.map('map-container').setView([-6.2088, 106.8456], 13);
+
+            // Tambahkan layer peta dari OpenStreetMap
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            }).addTo(map);
+        }
+
+        // Fungsi untuk menambahkan log
+        function addLog(message) {
+            const item = document.createElement('li');
+            item.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logListEl.prepend(item);
+        }
+        
+        // Inisialisasi peta saat halaman dimuat
+        initMap();
+
+        // Hubungkan ke server Socket.IO
+        const socket = io(serverUrl);
+
+        socket.on("connect", () => {
+            statusEl.textContent = `Terhubung! Mendengarkan event: "${targetEvent}"`;
+            console.log("Terhubung ke server dengan ID:", socket.id);
+        });
+
+        socket.on("disconnect", () => {
+            statusEl.textContent = "Koneksi terputus.";
+        });
+        
+        // =========================================================
+        // INI ADALAH BAGIAN UTAMA: MENDENGARKAN EVENT 'route/05'
+        // =========================================================
+        socket.on(targetEvent, (data) => {
+            console.log("Menerima data di channel", targetEvent, data);
+            
+            // Tampilkan data mentah di log
+            addLog(JSON.stringify(data));
+
+            // Ekstrak data lokasi
+            const lat = data.location.lat;
+            const long = data.location.long;
+            const driverId = data.driverId;
+            const isFull = data.isFull;
+
+            const markerPopupContent = `<b>Driver ID:</b> ${driverId}<br><b>Status:</b> ${isFull ? 'Penuh' : 'Tersedia'}`;
+
+            // Jika marker belum ada di peta, buat baru
+            if (!driverMarker) {
+                driverMarker = L.marker([lat, long]).addTo(map)
+                    .bindPopup(markerPopupContent)
+                    .openPopup();
+                // Pusatkan peta ke lokasi driver
+                map.setView([lat, long], 16);
+            } else {
+                // Jika sudah ada, cukup update posisinya
+                driverMarker.setLatLng([lat, long]);
+                driverMarker.setPopupContent(markerPopupContent);
+            }
+        });
+
+    </script>
+</body>
+</html>
