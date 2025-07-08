@@ -49,7 +49,10 @@
         const logListEl = document.getElementById('log-list');
 
         let map;
-        let driverMarker;
+        // Objek untuk menyimpan marker berdasarkan driverId
+        const driverMarkers = {};
+        // Objek untuk menyimpan timer timeout untuk setiap marker
+        const markerTimeouts = {};
 
         // Fungsi untuk inisialisasi peta
         function initMap() {
@@ -94,7 +97,13 @@
             // Tampilkan data mentah di log
             addLog(JSON.stringify(data));
 
-            // Ekstrak data lokasi
+            // Validasi data yang diterima
+            if (!data || !data.location || typeof data.location.lat === 'undefined' || typeof data.location.long === 'undefined' || typeof data.driverId === 'undefined') {
+                console.error("Data tidak lengkap atau format salah:", data);
+                addLog("ERROR: Data tidak lengkap atau format salah diterima.");
+                return;
+            }
+
             const lat = data.location.lat;
             const long = data.location.long;
             const driverId = data.driverId;
@@ -102,18 +111,32 @@
 
             const markerPopupContent = `<b>Driver ID:</b> ${driverId}<br><b>Status:</b> ${isFull ? 'Penuh' : 'Tersedia'}`;
 
-            // Jika marker belum ada di peta, buat baru
-            if (!driverMarker) {
-                driverMarker = L.marker([lat, long]).addTo(map)
+            // Hapus timeout sebelumnya jika ada, karena data baru masuk untuk driver ini
+            if (markerTimeouts[driverId]) {
+                clearTimeout(markerTimeouts[driverId]);
+            }
+
+            // Jika marker untuk driver ini sudah ada di peta, update posisinya
+            if (driverMarkers[driverId]) {
+                driverMarkers[driverId].setLatLng([lat, long]);
+                driverMarkers[driverId].setPopupContent(markerPopupContent);
+            } else {
+                // Jika belum ada, buat marker baru dan tambahkan ke peta
+                console.log(`Membuat marker baru untuk Driver ID: ${driverId}`);
+                driverMarkers[driverId] = L.marker([lat, long]).addTo(map)
                     .bindPopup(markerPopupContent)
                     .openPopup();
-                // Pusatkan peta ke lokasi driver
-                map.setView([lat, long], 16);
-            } else {
-                // Jika sudah ada, cukup update posisinya
-                driverMarker.setLatLng([lat, long]);
-                driverMarker.setPopupContent(markerPopupContent);
             }
+
+            // Set timeout baru untuk menghapus marker jika tidak ada update dalam 30 detik
+            markerTimeouts[driverId] = setTimeout(() => {
+                console.log(`Menghapus marker untuk Driver ID: ${driverId} karena tidak aktif selama 30 detik.`);
+                if (driverMarkers[driverId]) {
+                    map.removeLayer(driverMarkers[driverId]);
+                    delete driverMarkers[driverId]; // Hapus referensi marker
+                }
+                delete markerTimeouts[driverId]; // Hapus referensi timeout
+            }, 30000); // 30000 milidetik = 30 detik
         });
 
     </script>
